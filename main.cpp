@@ -43,7 +43,7 @@ void * thread_func(void *param)
     while (!(next_pid = this_thread.next->pid)) {
     }
     
-    const int cpu = index * num_cores / THREAD_COUNT;
+    const int cpu = 0; //index * num_cores / THREAD_COUNT;
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(cpu, &cpuset);
