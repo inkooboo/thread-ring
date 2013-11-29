@@ -68,7 +68,7 @@ int main(int, char *argv[])
     pthread_attr_init(&stack_attr);
 
     for (int i = 0; i < THREAD_COUNT; ++i) {
-	indexes[i] = i;
+        indexes[i] = i;
         pthread_attr_setstack(&stack_attr, &stacks[i], STACK_SIZE);
         pthread_create(&threads[i], &stack_attr, &thread_func, (void *)(indexes + i));
     }
