@@ -8,21 +8,22 @@
 
 enum {
    THREAD_COUNT = 503,
-   STACK_SIZE = 256,
+   STACK_SIZE = 256
 };
 
-typedef char[64] cache_pad_t;
+typedef char cache_pad_t[64];
 
 char stacks[THREAD_COUNT][STACK_SIZE];
 
 struct thread_t {
+    pthread_t pthread;
+    cache_pad_t pad0;
     int index;
     cache_pad_t pad1;
-    std::atomic<int> mailbox;
-    cache_pad_t pad2;
     thread_t *next;
     cache_pad_t pad3;
-    std::atomic<pid_t> pid;
+    std::atomic<int> mailbox;
+    cache_pad_t pad2;
 } threads[THREAD_COUNT];
 
 int max_token = 0;
@@ -35,26 +36,12 @@ void * thread_func(void *param)
     std::atomic<int> &mailbox  = this_thread.mailbox;
     std::atomic<int> &next_mailbox = this_thread.next->mailbox;
 
-    const pid_t this_pid = gettid();
-    this_thread.pid = this_pid;
-
-    // wait for next thread became started
-    pid_t next_pid =  0;
-    while (!(next_pid = this_thread.next->pid)) {
-    }
-    
-    const int cpu = 0; //index * num_cores / THREAD_COUNT;
+    const int cpu = index * num_cores / THREAD_COUNT;
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(cpu, &cpuset);
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 
-    sched_param normal;
-    sched_getparam(this_pid, &normal);
-    
-    sched_param lower;
-    lower.sched_priority = normal.sched_priority + 1;
-    
     for (;;) {
         const int token = mailbox.load(std::memory_order_relaxed);
         if (!token) {
@@ -63,11 +50,10 @@ void * thread_func(void *param)
         }
 
         next_mailbox.store(token + 1, std::memory_order_relaxed);
-        mailbox.store(0, std::memory_order_relaxed);
+        sched_yield();
         
-        // reschedule threads
-        sched_setscheduler(next_pid, SCHED_FIFO, &normal);
-        sched_setscheduler(this_pid, SCHED_FIFO, &lower);
+	mailbox.store(0, std::memory_order_relaxed);
+
         
         if (token == max_token) {
             printf("%d\n", index + 1);
@@ -91,7 +77,6 @@ int main(int, char *argv[])
         threads[i].index = i;
         threads[i].next = &threads[(i + 1) % THREAD_COUNT];
         threads[i].mailbox.store(0);
-        threads[i].pid.store(0);
     }
     threads[0].mailbox.store(1);
 
@@ -100,11 +85,11 @@ int main(int, char *argv[])
     pthread_attr_init(&stack_attr);
     for (int i = 0; i < THREAD_COUNT; ++i) {
         pthread_attr_setstack(&stack_attr, &stacks[i], STACK_SIZE);
-        pthread_create(&threads[i], &stack_attr, &thread_func, (void *)(indexes + i));
+        pthread_create(&(threads[i].pthread), &stack_attr, &thread_func, (void *)(threads + i));
     }
 
     // wait
-    pthread_join(threads[(max_token - 1) % THREAD_COUNT], NULL);
+    pthread_join(threads[(max_token - 1) % THREAD_COUNT].pthread, NULL);
 
     return 0;
 }
