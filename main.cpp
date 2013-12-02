@@ -52,7 +52,7 @@ void * thread_func(void *param)
         next_mailbox.store(token + 1, std::memory_order_relaxed);
         sched_yield();
         
-	mailbox.store(0, std::memory_order_relaxed);
+        mailbox.store(0, std::memory_order_relaxed);
 
         
         if (token == max_token) {
